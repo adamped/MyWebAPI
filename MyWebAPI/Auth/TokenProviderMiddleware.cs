@@ -104,7 +104,7 @@ namespace MyWebAPI.Auth
 
             // You might want to inject IDataRepository into the constructor, to allow communication with your database.
 
-            return false;
+            return true;
         }
     }
 }

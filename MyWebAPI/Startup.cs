@@ -4,8 +4,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using MyWebAPI.Abstraction;
+using MyWebAPI.Auth;
 using MyWebAPI.Repository;
+using System;
+using System.Text;
 
 namespace MyWebAPI
 {
@@ -43,7 +48,58 @@ namespace MyWebAPI
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
 
+            // Consumption
+            TokenOAuthConsumption(app);
+
+            var secretKey = Configuration["Auth:Secret"];
+
+            // Add JWT generation endpoint:
+            var signingKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(secretKey));
+            var options = new TokenProviderOptions
+            {
+                Audience = Configuration["Auth:Audience"],
+                Issuer = Configuration["Auth:Issuer"],
+                SigningCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256),
+            };
+
+            app.UseMiddleware<TokenProviderMiddleware>(Options.Create(options));
+
             app.UseMvc();
+
+            app.UseDeveloperExceptionPage();
+        }
+
+        private void TokenOAuthConsumption(IApplicationBuilder app)
+        {
+
+            var secretKey = Configuration["Auth:Secret"];
+            var signingKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(secretKey));
+
+            app.UseJwtBearerAuthentication(new JwtBearerOptions
+            {
+                AutomaticAuthenticate = true,
+                AutomaticChallenge = true,
+                TokenValidationParameters = new TokenValidationParameters
+                {
+                    // The signing key must match!
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = signingKey,
+
+                    // Validate the JWT Issuer (iss) claim
+                    ValidateIssuer = true,
+                    ValidIssuer = Configuration["Auth:Issuer"],
+
+                    // Validate the JWT Audience (aud) claim
+                    ValidateAudience = true,
+                    ValidAudience = Configuration["Auth:Audience"],
+
+                    // Validate the token expiry
+                    ValidateLifetime = true,
+
+                    // If you want to allow a certain amount of clock drift, set that here:
+                    ClockSkew = TimeSpan.Zero
+                }
+            });
         }
     }
 }
